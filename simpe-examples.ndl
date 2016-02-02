@@ -1,0 +1,195 @@
+
+rack R22 {
+    vertical {
+        hoizontal {
+        0 1
+        }
+        2 3 4 5 6 7 8 9 10 11 12
+        13 14 15 16 17 18 19 20 21
+    }
+}
+
+rack R4 {
+    vertical {
+        horizontal {
+            0, 1
+        },
+        horizontal {
+            2, 3
+        }
+    }
+}
+
+rack R10 {
+    vertical {
+        horizontal {
+            0, 1
+        },
+        horizontal {
+            vertical {
+                horizontal {
+                    9, 8
+                },
+                horizontal {
+                    6, 7
+                }
+            },
+            2, 3, 4, 5
+        }
+    }
+}
+
+
+card LanCard6 {
+    1: LAN
+    2: LAN
+    3: LAN
+    4: LAN
+    5: LAN
+    6: LAN
+}
+
+card WanCard2 {
+    1: WAN
+    2: WAN
+}
+
+node node-a {
+    type: R22
+    slot-1: WanCard2
+    slot-2: WanCard2
+    slot-3: LanCard6
+    sfp sfp-name {
+        3/2
+    }
+}
+
+configuration node-a-simple-conf {
+    vlan 510 {
+        1/3, 1/4,
+    }
+}
+
+configuration-type vlan number aggr {
+    list interface
+}
+
+configuration-type lag no-subject aggr {
+    master-port: attr switch-port
+    member-ports: list interface
+    hashing-algo: value enum { src-mac, dst-mac, src-dst-mac, src-ip, dst-ip, src-dst-ip }
+}
+
+annotation template-from aggr {
+    id: symbol
+}
+
+annotation template-from value id
+
+annotation template-source-info aggr {
+    file-name : string
+    id        : string
+    line      : number
+    column    : number
+}
+
+annotation general(a) {
+    info: a
+}
+
+
+[syn number vlan-out 43]
+
+
+configuration temp {
+    vlan [vlan-id] {
+        [vlan-in], [vlan-out] ~general(number){info=12}
+    }
+}
+
+configuration temp {
+    vlan 8~template-source-info{file-name="config.tndl" id="vlan-id" line=2 column=10} {
+        1/1/1~template-source-info{file-name="config.tndl" id="vlan-in" line=3 column=9}, 1/1/2~template-source-info{file-name="config.tndl" id="vlan-id" line=3 column=20}
+    }
+}
+
+
+configuration-type alma no-subject list switch-port
+
+configuration discrate-lag(num vlan_id, interface in, interface out1, interface out2) {
+    vlan vlan_id {
+        in, out1, out2
+    }
+    alma { 1, 2, 3 ~ template-from{id=alma-3}, 4 ~ template-from:alma-4}
+    port-map {
+
+    }
+    lag {
+        master-port: sw-1,
+        member-ports {
+            out1, out2
+        },
+        hashing-algo: src-mac
+    }
+}
+
+configuration discrate-lag_merge(num vlan_id, interface in1, interface in2, interface out) {
+    vlan vlan_id {
+        in1, in2, out
+    }
+}
+
+network helper-network {
+    nodes {
+        node-a helper-node-a { }
+    }
+}
+
+network main-bench(vlan_id) {
+    nodes {
+        node-a node-a-inst {
+            discrate-lag(vlan_id, 1/3, 1/4, 1/5)
+        },
+        node-b node-b-inst {
+            discrate-lag_merge(vlan_id, 2/3, 2/4, 2/5)
+        },
+        node-a node-c-inst
+    },
+    networks {
+        helper-network hp
+    },
+    connections std {
+        connection (node-a-inst:1/2, node-b-inst:3/2),
+        connection (node-a-inst:1/4, node-b-inst:5/3),
+        connection (hp.helper-node-a:3/1, node-b-inst:5/4)
+    }
+}
+
+diagram main2 {
+    diagram-type: detailed
+    networks {
+        main-bench(510) mb
+    }
+    layout std {
+        mb.node-a-inst left mb.node-b-inst,
+        group a {
+            mb.node-a-inst lefton mb.node-b-inst
+        },
+        a under node-c-inst
+    }
+}
+
+diagram main(num vlan_id) {
+        diagram-type: detailed
+    networks {
+        main_banch(vlan_id) mb
+    }
+    layout std {
+        mb.node-a-inst left mb.node-b-inst,
+        group a {
+            mb.node-a-inst lefton mb.node-b-inst
+        },
+        a under mb.node-c-inst
+    }
+}
+

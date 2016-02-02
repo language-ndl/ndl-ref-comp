@@ -1,0 +1,165 @@
+
+----
+entities:
+
+  id
+  num
+  rack
+  card
+  node
+  slot-id
+  interface-id
+  switch-port
+  configuration
+  network
+  diagram-type
+
+diagram-type:
+  | detailed                 -- show every information, entity
+  | connection-oriented      -- only nodes, connections
+  | vlan-oriented            -- separated connections by vlan-id
+  | network-oriented         -- structural diagram by network entites
+
+----
+template: TODO
+type-safe template mechanism
+
+
+network main-bench(number vlan_id) {
+    nodes {
+        node-a node-a-inst {
+            discrate-lag(vlan_id, [node-a-1], [node-a-2], [node-a-3])
+            // --> discrate-lag(vlan_id, 1/1/3 ~ template-from{id:node-a-1}, 1/1/4 ~ template-from{id:node-a-2}, 1/1/5 ~ template-from{id:node-a-3})
+        },
+        node-b node-b-inst {
+            discrate-lag_merge(vlan_id, [node-b-1], [node-b-2], [node-b-3])
+        },
+        node-a node-c-inst
+    },
+    networks {
+        helper-network hp
+    },
+    connections std {
+        connection (node-a-inst:1/1/2, node-b-inst:1/3/2),
+        connection (node-a-inst:1/1/4, node-b-inst:1/5/3),
+        connection (hp.helper-node-a:1/3/1, node-b-inst:1/5/4)
+    }
+}
+
+----
+grammar: TODO: update
+
+
+list<a>            = a1, a2, a3, ... , an
+sequence<a>        = a1 a2 a3 ... an
+parens<a>          = ( a )
+braces<a>          = { a }
+brackets<a>        = [ a ]
+name<a>            = "a"
+
+
+module             = sequence<top-level-decl>
+top-level-decl     = rack | card | node | configuration-type | configuration  | annotation-type | network | diagram
+entity-type        = id | num | rack | card | node | slot-id | interface-id | interface-type | switch-port | configuration
+entity             = id | num | interface-id
+parameter-list     = parens<list<parameter>>
+parameter          = name<entity-type> id
+arg-list           = parens<list<arg>>
+arg                = id
+
+
+slot-id            = number
+if-id              = slot-id "/" number
+network-path       = id ["." network-path]
+full-node-id       = [network-path "."] id
+full-if-id         = full-node-id ":" if-id
+interface-type     = "LAN" | "WAN"
+
+
+rack               = "rack" id braces<rack-body>
+rack-body          = sequence<rack-entry>
+rack-entry         = number | "horizontal" brace<rack-body> | "vertical" brace<rack-body>
+
+
+card               = "card" id braces<card-block>
+card-block         = sequence<card-interface>
+card-interface     = number ":" interface-type
+
+
+node               = "node" id brace<node-block>
+node-block         = sequence<node-entry>
+node-entry         = node-attr | node-sfp-entry
+node-attr          = id ":" id
+node-sfp-entry     = "sfp" id braces<list<number>>
+
+
+configuration-type = "configuration-type" id conf-type-subject | conf-type-def
+conf-type-subject  = "no-subject" | name<entity>
+conf-type-def      = conf-type-aggr | conf-type-list | conf-type-seq | conf-type-value
+conf-type-entry    = id ":" conf-type-def
+conf-type-aggr     = "aggr" braces<conf-type-entry>
+conf-type-list     = "list" conf-type-arg
+conf-type-seq      = "seq" conf-type-arg
+conf-type-value    = "value" conf-type-arg
+conf-type-arg      = name<entity-type> | conf-type-enum
+conf-type-enum     = "enum" braces<list<id>>
+
+
+configuration      = "configuration" id [parameter-list] brace<conf-body>
+conf-body          = list<conf-entry>
+conf-entry         = conf-call | conf-attr
+conf-call          = "configuration" id [arg-list]
+conf-attr          = id [name<entity>] conf-def
+conf-def           = conf-aggr | conf-list | conf-seq | conf-value
+conf-list          = braces<list<entity>>
+conf-seq           = braces<sequence<entity>>
+conf-value         = ":" entity
+
+
+annotation-type    = "annotation" id [ann-type-temp-args] ann-type-def
+ann-type-def       = ann-type-aggr | ann-type-list | ann-type-seq | ann-type-value
+ann-type-entry     = id ":" ann-type-def
+ann-type-aggr      = "aggr" braces<ann-type-entry>
+ann-type-list      = "list" ann-type-arg
+ann-type-seq       = "seq" ann-type-arg
+ann-type-value     = ["value"] ann-type-arg
+ann-type-arg       = name<entity-type> | ann-type-enum | id
+ann-type-enum      = "enum" braces<list<id>>
+ann-type-temp-args = parens<list<id>>
+
+
+annotation-list    = [annotation] | annotation [annotation-list]
+annotation         = "~" id [ann-temp-args] ann-body
+ann-body           = id [id | number] ann-def
+ann-def            = ann-aggr | ann-list | ann-seq | ann-value
+ann-list           = braces<list<entity>>
+ann-seq            = braces<sequence<entity>>
+ann-value          = ":" entity
+ann-temp-args      = parens<list<name<entity-type>>>
+
+
+network            = "network" id [parameter-list] network-body
+network-body       = braces<sequence<network-entity>>
+network-entity     = network-nodes | network-networks | network-connections
+network-nodes      = "nodes" [braces<list<node-instance>>]
+network-networks   = "networks" braces<list<network-instance>>
+network-connections = "connections" braces<list<connection>>
+
+
+node-instance      = id id braces<list<node-instance-config>>
+node-instance-config = id arg-list
+network-instance   = id id arg-list
+connection         = "connection" parens<full-if-id "," full-if-id>
+
+
+diagram            = "diagram" id parameter-list braces<diagram-body>
+diagram-body       = sequence<diagram-entry>
+diagram-entry      = diagram-type-entry | network-networks | layout
+diagram-type-entry = "diagram-type" ":" diagram-type
+diagram-type       = "detailed" | "connection-oriented" | "vlan-oriented" | "network-oriented"
+layout             = "layout" id braces<layout-body>
+layout-body        = sequence<layout-constraint>
+layout-constraint  = full-node-id layout-operator full-node-id | group
+layout-operator    = "left" | "right" | "up" | "down"
+group              = "group" id brace<layout-body>
+
